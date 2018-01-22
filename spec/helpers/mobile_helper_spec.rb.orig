@@ -21,7 +21,11 @@ describe MobileHelper do
                                mobile_logo_file_name: 'logo.png',
                                website: nil)
 
-        expect(helper.mobile_header(affiliate)).to have_selector('div', text: 'USASearch')
+<<<<<<< HEAD
+        expect(helper.mobile_header(affiliate)).to have_selector('h1', text: 'USASearch')
+=======
+        helper.mobile_header(affiliate).should have_selector(:div, content: 'USASearch')
+>>>>>>> 841fcba... [#149159069, #149158489] improve 508 compliance
       end
     end
   end
