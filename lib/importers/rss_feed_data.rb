@@ -40,6 +40,8 @@ class RssFeedData
 
   def validate_document
     if !(document && document.valid?)
+      Rails.logger.error("RSS Document Missing for #{rss_feed_url.url}") if !document.present?
+      Rails.logger.error("RSS Document Invalid for #{rss_feed_url.url}: #{document.errors.full_messages.join(', ')}") if !document.valid?
       rss_feed_url.update_attributes!(last_crawl_status: 'Unknown feed type.')
       false
     else
