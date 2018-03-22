@@ -101,7 +101,8 @@ describe Sites::UsersController do
           expect(site_users).to receive(:exists?).and_return(false)
 
           email = double('email')
-          expect(new_user).to receive(:send_new_affiliate_user_email).with(site, current_user)
+          Emailer.should_receive(:new_affiliate_user).with(site, new_user, current_user).and_return(email)
+          email.should_receive(:deliver_now)
           expect(new_user).to receive(:add_to_affiliate).with(site, "@[Contacts:1001]")
 
           post :create,

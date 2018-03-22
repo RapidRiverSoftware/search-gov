@@ -71,7 +71,7 @@ class User < ActiveRecord::Base
 
   def deliver_password_reset_instructions!
     reset_perishable_token! if perishable_token_expired? || perishable_token.blank?
-    MandrillUserEmailer.new(self).send_password_reset_instructions
+    Emailer.password_reset_instructions(self, host_with_port).deliver
   end
 
   def to_label
@@ -140,10 +140,6 @@ class User < ActiveRecord::Base
     end
   end
 
-  def send_new_affiliate_user_email(affiliate, inviter_user)
-    MandrillUserEmailer.new(self).send_new_affiliate_user(affiliate, inviter_user)
-  end
-
   def add_to_affiliate(affiliate, source)
     affiliate.users << self unless self.affiliates.include? affiliate
     NutshellAdapter.new.push_site affiliate
@@ -184,11 +180,11 @@ class User < ActiveRecord::Base
   end
 
   def deliver_new_user_email_verification
-    MandrillUserEmailer.new(self).send_email_verification
+    Emailer.new_user_email_verification(self).deliver
   end
 
   def deliver_welcome_to_new_user_added_by_affiliate
-    MandrillUserEmailer.new(self).send_welcome_to_new_user_added_by_affiliate
+    Emailer.welcome_to_new_user_added_by_affiliate(affiliates.first, self, inviter).deliver
   end
 
   def detect_deliver_welcome_email
@@ -221,7 +217,7 @@ class User < ActiveRecord::Base
   end
 
   def send_welcome_to_new_user_email
-    MandrillUserEmailer.new(self).send_welcome_to_new_user
+    Emailer.welcome_to_new_user(self).deliver_now
   end
 
   def audit_trail_user_added(site, source)

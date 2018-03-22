@@ -4,7 +4,6 @@ describe User do
   fixtures :users, :affiliates, :memberships
 
   let(:adapter) { double(NutshellAdapter) }
-  let(:mandrill_user_emailer) { double(MandrillUserEmailer) }
   let(:valid_attributes) do
     { email: "unique_login@agency.gov",
       password: "password1!",
@@ -25,13 +24,6 @@ describe User do
 
     allow(NutshellAdapter).to receive(:new) { adapter }
     allow(adapter).to receive(:push_user)
-
-    allow(MandrillUserEmailer).to receive(:new).with(an_instance_of(User)).and_return(mandrill_user_emailer)
-    allow(mandrill_user_emailer).to receive(:send_new_affiliate_user)
-    allow(mandrill_user_emailer).to receive(:send_email_verification)
-    allow(mandrill_user_emailer).to receive(:send_password_reset_instructions)
-    allow(mandrill_user_emailer).to receive(:send_welcome_to_new_user)
-    allow(mandrill_user_emailer).to receive(:send_welcome_to_new_user_added_by_affiliate)
   end
 
   describe 'schema' do
@@ -91,12 +83,13 @@ describe User do
     end
 
     it "should send email verification to user" do
-      expect(mandrill_user_emailer).to receive(:send_email_verification)
+      Emailer.should_receive(:new_user_email_verification).with(an_instance_of(User)).and_return @emailer
+
       User.create!(valid_attributes)
     end
 
     it "should not receive welcome to new user added by affiliate" do
-      expect(mandrill_user_emailer).not_to receive(:send_welcome_to_new_user_added_by_affiliate)
+      Emailer.should_not_receive(:welcome_to_new_user_added_by_affiliate)
       User.create!(valid_attributes)
     end
 
@@ -153,47 +146,6 @@ describe User do
         user.valid?
         expect(user.errors[:organization_name]).to eq []
       end
-    end
-  end
-
-  describe '#deliver_password_reset_instructions!' do
-    let(:user) { User.create!(valid_attributes.merge(perishable_token: original_token)) }
-
-    before do
-      allow(Authlogic::Random).to receive(:friendly_token).and_return(random_new_token)
-      allow(adapter).to receive(:push_user)
-    end
-
-    let(:original_token) { 'original_perishable_token_that_should_change' }
-    let(:random_new_token) { 'something_random_the_token_should_change_to' }
-
-    it "does not reset the user's perishable token" do
-      expect{ user.deliver_password_reset_instructions! }.
-        not_to change{ user.perishable_token }
-    end
-
-    context 'when the user has no perishable token' do
-      let(:user) { User.create!(valid_attributes.merge(perishable_token: nil)) }
-
-      it "sets the user's perishable token" do
-        expect{ user.deliver_password_reset_instructions! }.
-          to change{ user.perishable_token }.from(nil).to(random_new_token)
-      end
-    end
-
-    context 'when the perishable token is expired' do
-      #yes, the expiration is based on updated_at...blame authlogic
-      before { user.update_attribute(:updated_at, 2.hours.ago) }
-
-      it 'resets the token' do
-        expect{ user.deliver_password_reset_instructions! }.
-          to change{ user.perishable_token }.from(original_token).to(random_new_token)
-      end
-    end
-
-    it 'sends the password_reset_instructions template via mandrill' do
-      expect(mandrill_user_emailer).to receive(:send_password_reset_instructions)
-      user.deliver_password_reset_instructions!
     end
   end
 
@@ -292,7 +244,7 @@ describe User do
       end
 
       it 'resends the verification email' do
-        expect(mandrill_user_emailer).to receive(:send_email_verification)
+        expect(Emailer).to receive(:new_user_email_verification).with(user)
         update_email
       end
 
@@ -431,21 +383,6 @@ describe User do
     end
   end
 
-  describe "#send_new_affiliate_user_email" do
-    let(:inviter) { users(:affiliate_manager) }
-    let(:affiliate) { affiliates(:basic_affiliate) }
-
-    before do
-      @user = users(:marilyn)
-    end
-
-    it "sends the 'new_affiliate_user' email via Mandrill with the right merge fields" do
-      expect(mandrill_user_emailer).to receive(:send_new_affiliate_user).with(affiliate, inviter)
-
-      @user.send_new_affiliate_user_email(affiliate, inviter)
-    end
-  end
-
   describe "on update from pending_approval to approved" do
     before do
       @user = users(:affiliate_manager_with_pending_approval_status)
@@ -458,7 +395,7 @@ describe User do
       end
 
       it "should deliver welcome email" do
-        expect(mandrill_user_emailer).to receive(:send_welcome_to_new_user)
+        Emailer.should_receive(:welcome_to_new_user).with(an_instance_of(User)).and_return @emailer
         @user.save!
       end
 
@@ -476,7 +413,7 @@ describe User do
       end
 
       it "should not deliver welcome email" do
-        expect(mandrill_user_emailer).not_to receive(:send_welcome_to_new_user)
+        Emailer.should_not_receive(:welcome_to_new_user).with(an_instance_of(User))
         @user.save!
       end
     end
@@ -503,9 +440,10 @@ describe User do
       end
 
       it "should receive welcome new user added by affiliate email verification" do
+        Emailer.should_receive(:welcome_to_new_user_added_by_affiliate).and_return @emailer
+        Emailer.should_not_receive(:new_user_email_verification)
+        adapter.should_receive(:push_user)
         new_user = User.new_invited_by_affiliate(inviter, affiliate, { :contact_name => 'New User Name', :email => 'newuser@approvedagency.com' })
-        expect(mandrill_user_emailer).to receive(:send_welcome_to_new_user_added_by_affiliate)
-        expect(mandrill_user_emailer).not_to receive(:send_email_verification)
         expect(adapter).to receive(:push_user)
         new_user.save!
         expect(new_user.email_verification_token).not_to be_blank
@@ -528,7 +466,7 @@ describe User do
 
       before do
         expect(user).to receive(:update_attributes)
-        expect(mandrill_user_emailer).not_to receive(:send_welcome_to_new_user)
+        expect(Emailer).to_not receive(:welcome_to_new_user)
         user.complete_registration({})
       end
 

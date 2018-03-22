@@ -8,6 +8,12 @@ class Emailer < ActionMailer::Base
   self.default from: DELIVER_FROM_EMAIL_ADDRESS,
                reply_to: REPLY_TO_EMAIL_ADDRESS
 
+  def password_reset_instructions(user, host_with_port)
+    @edit_password_reset_url = edit_password_reset_url(user.perishable_token, :protocol => 'https', :host => host_with_port)
+    setup_email(user.email, __method__)
+    send_mail(:text)
+  end
+
   def new_user_to_admin(user)
     @user = user
     setup_email("usagov@mail.usasearch.howto.gov", __method__)
@@ -23,14 +29,34 @@ class Emailer < ActionMailer::Base
     end
   end
 
+  def new_user_email_verification(user)
+    generic_user_text_email(user, __method__)
+  end
+
   def user_approval_removed(user)
     @user = user
     setup_email("usagov@mail.usasearch.howto.gov", __method__)
     send_mail(:text)
   end
 
+  def welcome_to_new_user(user)
+    generic_user_text_email(user, __method__)
+  end
+
   def new_affiliate_site(affiliate, user)
     @affiliate = affiliate
+    generic_user_text_email(user, __method__)
+  end
+
+  def new_affiliate_user(affiliate, user, current_user)
+    @affiliate = affiliate
+    @current_user = current_user
+    generic_user_text_email(user, __method__)
+  end
+
+  def welcome_to_new_user_added_by_affiliate(affiliate, user, current_user)
+    @affiliate = affiliate
+    @current_user = current_user
     generic_user_text_email(user, __method__)
   end
 
